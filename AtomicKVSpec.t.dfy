@@ -20,7 +20,9 @@ module AtomicKVSpec {
   datatype Constants = Constants()  // don't need any here
   datatype Variables = Variables(
   /*{*/
-    // define me
+  key: int, 
+  value: int, 
+  mappy: imap <int, int>
   /*}*/
   )
 
@@ -28,16 +30,38 @@ module AtomicKVSpec {
   // Be sure to check out IMapHelpers.t.dfy. It's helpful.
   ghost predicate Init(c: Constants, v: Variables) {
   /*{*/
-    && true  // define me
+    && forall k :: IsKey(k) ==> (k in v.mappy && v.mappy[k] == 0) //check that its a key, check that it's in mappy, and then check that it's 0
   /*}*/
   }
 
   /*{*/
+
+  ghost predicate Get(c: Constants, v: Variables, v':Variables, givenKey: int, returnValue: int)
+  {
+    && IsKey(givenKey)           
+    && givenKey in v.mappy       
+    && returnValue == v.mappy[givenKey] 
+    && v' == v
+  }
+
+  ghost predicate Put(c: Constants, v: Variables, v': Variables, givenKey:int, givenValue:int){
+    && IsKey(givenKey)
+    && v'.mappy == v.mappy[givenKey := givenValue] 
+    && (forall k :: k != givenKey ==> (k in v.mappy <==> k in v'.mappy)) 
+    && (forall k :: k != givenKey ==> (k in v.mappy ==> v.mappy[k] == v'.mappy[k])) 
+  }
+
+  ghost predicate NoOp(c: Constants, v: Variables, v': Variables){
+    && v' == v
+  }
+
   /*}*/
 
 ghost predicate NextStep(c: Constants, v: Variables, v': Variables, event: Event) {
   /*{*/
-    true // Replace me
+    | Get(c, v, v', event.key, event.value)
+    | Put(c, v, v', event.key, event.value)
+    | NoOp(c, v, v', event)
   /*}*/
 }
 
