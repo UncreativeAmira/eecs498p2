@@ -20,8 +20,6 @@ module AtomicKVSpec {
   datatype Constants = Constants()  // don't need any here
   datatype Variables = Variables(
   /*{*/
-  key: int, 
-  value: int, 
   mappy: imap <int, int>
   /*}*/
   )
@@ -35,33 +33,27 @@ module AtomicKVSpec {
   }
 
   /*{*/
-
-  ghost predicate Get(c: Constants, v: Variables, v':Variables, givenKey: int, returnValue: int)
-  {
-    && IsKey(givenKey)           
-    && givenKey in v.mappy       
-    && returnValue == v.mappy[givenKey] 
-    && v' == v
-  }
-
-  ghost predicate Put(c: Constants, v: Variables, v': Variables, givenKey:int, givenValue:int){
-    && IsKey(givenKey)
-    && v'.mappy == v.mappy[givenKey := givenValue] 
-    && (forall k :: k != givenKey ==> (k in v.mappy <==> k in v'.mappy)) 
-    && (forall k :: k != givenKey ==> (k in v.mappy ==> v.mappy[k] == v'.mappy[k])) 
-  }
-
-  ghost predicate NoOp(c: Constants, v: Variables, v': Variables){
-    && v' == v
-  }
-
   /*}*/
 
 ghost predicate NextStep(c: Constants, v: Variables, v': Variables, event: Event) {
   /*{*/
-    | Get(c, v, v', event.key, event.value)
-    | Put(c, v, v', event.key, event.value)
-    | NoOp(c, v, v', event)
+  match event {
+    
+    case Get(key, value) =>
+      && IsKey(key)                       
+      && key in v.mappy                   
+      && value == v.mappy[key]            
+      && v' == v                          
+
+    case Put(key, value) =>
+      && IsKey(key)                       
+      && v'.mappy == v.mappy[key := value] //pretty sure this should update it whether or not its already in the map
+      && (forall k :: k != key ==> (k in v.mappy <==> k in v'.mappy)) 
+      && (forall k :: k != key ==> (k in v.mappy ==> v.mappy[k] == v'.mappy[k])) 
+
+    case NoOp() =>
+      && v' == v                          
+  }
   /*}*/
 }
 
