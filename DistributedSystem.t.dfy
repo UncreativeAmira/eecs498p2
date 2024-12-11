@@ -12,27 +12,50 @@ module DistributedSystem {
   type HostId = Network.HostId
 
 /*{*/
-  datatype Constants = Constants()
+  datatype Constants = Constants(hosts: seq<Host.Constants>, network: Network.Constants)
   {
     ghost predicate WF() {
-      && true
+      0 < |hosts|
+    }
+
+    ghost predicate ValidHostId(id: HostId) {
+      id < |hosts|
     }
   }
-  datatype Variables = Variables()
+  datatype Variables = Variables(hosts: seq<Host.Variables>, network: Network.Variables)
   {
     ghost predicate WF(c: Constants) {
-      && true
+      && c.WF()
+      && |hosts| == |c.hosts|
     }
   }
 
   ghost predicate Init(c: Constants, v: Variables)
   {
-    && true   // define me
+    && v.WF(c)
+    && Host.GroupInit(c.hosts, v.hosts)
+    && Network.Init(c.network, v.network)
   }
 
-  ghost predicate Next(c: Constants, v: Variables, v': Variables, event: Event)
-  {
-    && true   // define me
+  ghost predicate HostAction(c: Constants, v: Variables, v': Variables, event: Event, hostid: HostId, msgOps: Network.MessageOps){
+    && v.WF(c)
+    && v'.WF(c)
+    && c.ValidHostId(hostid)
+    && Host.Next(c.hosts[hostid], v.hosts[hostid], v'.hosts[hostid], event, msgOps)
+    && Network.Next(c.network, v.network, v'.network, msgOps)
   }
+
+  datatype Step =
+    | HostActionStep(hostid: HostId, msgOps: Network.MessageOps) 
+
+  ghost predicate NextStep(c: Constants, v: Variables, v': Variables, event: Event, step: Step)
+    {
+        && HostAction(c, v, v', event, step.hostid, step.msgOps)
+    }
+
+  ghost predicate Next(c: Constants, v: Variables, v': Variables, event: Event)
+    {
+        exists step :: NextStep(c, v, v', event, step)
+    }
 /*}*/
 }
