@@ -1,6 +1,6 @@
 module MessageType {
   datatype Message =
 /*{*/
-    | SomeMessage()  // Replace me
+    | Message(sentMap:imap<int, int>)  
 /*}*/
 }
