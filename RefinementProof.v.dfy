@@ -456,9 +456,8 @@ module RefinementProof refines RefinementObligation {
   ghost function VariablesAbstraction(c: Constants, v: Variables) : AtomicKVSpec.Variables
   {
 /*{*/
-    assert v.WF(c);
-    assert PartitionLayer(c, v).IsFullAndDisjoint();
-    AtomicKVSpec.Variables(PartitionLayer(c, v).SpecView())
+    var allParts := PartitionLayer(c, v).AllPartitions();
+    AtomicKVSpec.Variables(DisjointMapUnion(allParts))
 /*}*/
   }
 
