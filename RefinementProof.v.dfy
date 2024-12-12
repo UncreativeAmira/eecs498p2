@@ -8,7 +8,7 @@ module RefinementProof refines RefinementObligation {
   ghost function ConstantsAbstraction(c: Constants) : AtomicKVSpec.Constants
   {
 /*{*/
-    var result:AtomicKVSpec.Constants :| true; result  // Replace with your definition
+    AtomicKVSpec.Constants() //we have no constants
 /*}*/
   }
 
@@ -183,13 +183,16 @@ module RefinementProof refines RefinementObligation {
       case HostOwner(id) => (
 /*{*/
         // this branch should be true if host `id` thinks it owns `key`.
-        && true // Replace me
+        && c.ValidHostId(id)
+        && key in v.hosts[id].hostOwnedMap
 /*}*/
       )
       case MessageOwner(msg) => (
 /*{*/
         // this branch should be true if in-flight message `msg` thinks it owns `key`.
-        && true // Replace me
+        //do we have to check for validity of msg? don't think so
+        && msg in v.network.inFlightMessages
+        && key in msg.sentMap
 /*}*/
       )
       )
@@ -201,13 +204,16 @@ module RefinementProof refines RefinementObligation {
     && (match owner
       case HostOwner(id) =>
 /*{*/
-        // this branch should be true if host `id`, which we know claims `key`, assigns it `value`.
-        && true // Replace me
+      // this branch should be true if host `id`, which we know claims `key`, assigns it `value`.
+      //&& c.ValidHostId(id) not needed, already checked by rawownerclaimskey
+      && v.hosts[id].hostOwnedMap[key] == value
+
+        
 /*}*/
       case MessageOwner(msg) =>
 /*{*/
-        // this branch should be true if message `msg` which we know claims `key`, assigns it `value`.
-        && true // Replace me
+      // this branch should be true if message `msg` which we know claims `key`, assigns it `value`.
+      && msg.sentMap[key] == value
 /*}*/
       )
   }
@@ -226,7 +232,7 @@ module RefinementProof refines RefinementObligation {
     ghost function ValidHosts() : set<HostId>  // Here to satiate finite-set heuristic
     {
 /*{*/
-      {}    // Construct a set comprehension that identifies the valid host ids as a finite set.
+    {}  // Construct a set comprehension that identifies the valid host ids as a finite set.
 /*}*/
     }
 
@@ -471,6 +477,7 @@ module RefinementProof refines RefinementObligation {
     ensures AtomicKVSpec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
   {
 /*{*/
+    
 /*}*/
   }
 
