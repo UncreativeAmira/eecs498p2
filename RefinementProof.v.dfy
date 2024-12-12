@@ -232,8 +232,7 @@ module RefinementProof refines RefinementObligation {
     ghost function ValidHosts() : set<HostId>  // Here to satiate finite-set heuristic
     {
 /*{*/
-    set i: int | 0 <= i < |v.hosts| :: i as HostId   // Construct a set comprehension that identifies the valid host ids as a finite set.
-    //try this if above doesn't work
+    set x: nat | x < |v.hosts| && c.ValidHostId(x)
 /*}*/
     }
 
