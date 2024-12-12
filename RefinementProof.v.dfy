@@ -232,7 +232,7 @@ module RefinementProof refines RefinementObligation {
     ghost function ValidHosts() : set<HostId>  // Here to satiate finite-set heuristic
     {
 /*{*/
-    set x: nat | x < |v.hosts| && c.ValidHostId(x)
+    set id | 0 <= id < |c.hosts| && 0 < |c.hosts| && c.ValidHostId(id) 
 /*}*/
     }
 
@@ -269,7 +269,7 @@ module RefinementProof refines RefinementObligation {
     {
       // The map comprehension in MapUnionPreferLeft seems to lead to timeout grief
       // that's hard to profile, so this is opaque.
-      MapUnionPreferLeft(HostMaps(), MessageMaps())
+      MapUnionPreferLeft(HostMaps(), MessageMaps()) 
     }
 
     // If we don't touch *anything* in the client tables or network, it's a shame to 
@@ -474,13 +474,37 @@ module RefinementProof refines RefinementObligation {
   }
 
 /*{*/
+ /*ghost predicate allPartsIsFull(c: Constants, v: Variables){
+    && c.WF()
+    && Init(c,v)
+    //type PartitionsByOwner = map<MapOwner, imap<int,int>>
+    && HostOwner(0) in PartitionLayer(c, v).AllPartitions()
+    && PartitionLayer(c, v).AllPartitions()[HostOwner(0)] == ZeroMap() //want to say that hostowner 0 has a zero map!!!
+    && DisjointMapUnion(PartitionLayer(c, v).AllPartitions()) == ZeroMap()
+  }
+  */
+
+  lemma allPartsIsFull(c: Constants, v: Variables)
+    requires v.WF(c)
+    requires c.WF()
+    requires Init(c,v)
+    ensures DisjointMapUnion(PartitionLayer(c, v).AllPartitions()) == ZeroMap()
+  {
+    //maybe say something about init
+    assert |v.hosts| != 0;
+    assert PartitionLayer(c, v).ValidHosts() == {};
+    assert PartitionLayer(c, v).HostMaps() != map[];
+    assert HostOwner(0) in PartitionLayer(c, v).AllPartitions();
+  }
+
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
   {
 /*{*/
-    && v.WF(c)
-    && PartitionLayer(c, v).IsFullAndDisjoint()
+    //&& v.WF(c)
+    //&& PartitionLayer(c, v).IsFullAndDisjoint()
+    && true
 /*}*/
   }
 
@@ -493,6 +517,17 @@ module RefinementProof refines RefinementObligation {
     ensures AtomicKVSpec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
   {
 /*{*/
+  assert Inv(c,v);
+  assert Init(c, v);
+  //assert IsFull(ZeroMap()); //this passes
+  var allParts := DisjointMapUnion(PartitionLayer(c, v).AllPartitions());
+  //assert allPartsIsFull(c,v);
+  assert IsFull(allParts);
+  assert allParts == ZeroMap();
+
+  //ensure map we have is a zero map
+  //in the groupinit for hosts, only the first host aka host 0 has the zeromap
+
     
 /*}*/
   }
@@ -509,6 +544,7 @@ module RefinementProof refines RefinementObligation {
     ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
   {
 /*{*/
+
 /*}*/
   }
 }
