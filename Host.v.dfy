@@ -64,15 +64,15 @@ module Host {
   ghost predicate Next(c: Constants, v: Variables, v': Variables, event: Event, msgOps: Network.MessageOps)
     {
       match event {
-      case Get(key, value) =>
-        && key in v.hostOwnedMap
-        && value == v.hostOwnedMap[key]
-        && v' == v
-    
-      case Put(key, value) =>
-        && v'.hostOwnedMap == v.hostOwnedMap[key := value]
-        
-      case NoOp => SendMessage(c, v, v', event, msgOps) || ReceiveMessage(c, v, v', event, msgOps)
+        case Get(key, value) =>
+          && key in v.hostOwnedMap
+          && value == v.hostOwnedMap[key]
+          && v' == v
+      
+        case Put(key, value) =>
+          && v'.hostOwnedMap == v.hostOwnedMap[key := value]
+          
+        case NoOp => SendMessage(c, v, v', event, msgOps) || ReceiveMessage(c, v, v', event, msgOps)
 
       }
     }

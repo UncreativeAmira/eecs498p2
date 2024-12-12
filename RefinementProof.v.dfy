@@ -244,7 +244,8 @@ module RefinementProof refines RefinementObligation {
 /*{*/
       // Replace with a map whose keys are all of the HostOwners in the system,
       // and the values are the partial maps maintained by each host.
-      map[]
+      map id | id in ValidHosts() ::
+        HostOwner(id) := v.hosts[id].hostOwnedMap
 /*}*/
     }
 
@@ -254,7 +255,8 @@ module RefinementProof refines RefinementObligation {
       // Replace with a map whose keys are all of the MessageOwners alive in
       // the system, and the values are the partial maps maintained by each
       // message.
-      map[]
+      map msg | msg in v.network.inFlightMessages ::
+        MessageOwner(msg) := msg.sentMap
 /*}*/
     }
 
@@ -278,8 +280,8 @@ module RefinementProof refines RefinementObligation {
       requires IsFullAndDisjoint()
       requires v'.WF(c)
 /*{*/
-      requires true // replace with "network is unchanged"
-      requires true // replace with "all hosts' internal state is unchanged"
+      requires v'.network == v.network // network is unchanged
+      requires v'.hosts == v.hosts     //  all hosts' internal state is unchanged
 /*}*/
       ensures PartitionLayer(c, v').AllPartitions() == AllPartitions()
     {
@@ -454,7 +456,9 @@ module RefinementProof refines RefinementObligation {
   ghost function VariablesAbstraction(c: Constants, v: Variables) : AtomicKVSpec.Variables
   {
 /*{*/
-    var result:AtomicKVSpec.Variables :| true; result  // Replace with your definition
+    assert v.WF(c);
+    assert PartitionLayer(c, v).IsFullAndDisjoint();
+    AtomicKVSpec.Variables(PartitionLayer(c, v).SpecView())
 /*}*/
   }
 
@@ -464,7 +468,8 @@ module RefinementProof refines RefinementObligation {
   ghost predicate Inv(c: Constants, v: Variables)
   {
 /*{*/
-    true // supply your invariant
+    && v.WF(c)
+    && PartitionLayer(c, v).IsFullAndDisjoint()
 /*}*/
   }
 
