@@ -456,6 +456,18 @@ module RefinementProof refines RefinementObligation {
   ghost function VariablesAbstraction(c: Constants, v: Variables) : AtomicKVSpec.Variables
   {
 /*{*/
+    // 1. AllPartitions() combines HostMaps() and MessageMaps()
+    // 2. DisjointMapUnion() will create single map from all the partitions
+    // 3. even if keys overlap, DisjointMapUnion() will still produce map
+    // 
+    // we'll prove properties about this map thru our invariant
+    // 
+    // matches AtomicKVSpec's requirements:
+    // 1. returns a single imap
+    // 2. imap will contain all mappings from hosts to messages
+    // 3. properties of this map (like disjointness) will be proven separately in invariant (is this how we do it?)
+    // 
+    // this is way we can define an abstraction function independently of the properties we'll prove about it
     var allParts := PartitionLayer(c, v).AllPartitions();
     AtomicKVSpec.Variables(DisjointMapUnion(allParts))
 /*}*/
