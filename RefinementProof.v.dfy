@@ -340,7 +340,7 @@ module RefinementProof refines RefinementObligation {
       && PartitionIsFull()
       && IsDisjoint(AllPartitions())
     }
-
+  
     // Here's a key-granularity definition of disjointness.
     // Prove it to EstablishDisjointness().
     ghost predicate KeysOwnedDisjointly() {
@@ -474,37 +474,27 @@ module RefinementProof refines RefinementObligation {
   }
 
 /*{*/
- /*ghost predicate allPartsIsFull(c: Constants, v: Variables){
-    && c.WF()
-    && Init(c,v)
-    //type PartitionsByOwner = map<MapOwner, imap<int,int>>
-    && HostOwner(0) in PartitionLayer(c, v).AllPartitions()
-    && PartitionLayer(c, v).AllPartitions()[HostOwner(0)] == ZeroMap() //want to say that hostowner 0 has a zero map!!!
-    && DisjointMapUnion(PartitionLayer(c, v).AllPartitions()) == ZeroMap()
-  }
-  */
+lemma InitialStateFull(c: Constants, v: Variables)
+  requires c.WF()
+  requires v.WF(c)
+  requires Init(c, v)
+  ensures PartitionLayer(c, v).PartitionIsFull()
 
-  lemma allPartsIsFull(c: Constants, v: Variables)
-    requires v.WF(c)
-    requires c.WF()
-    requires Init(c,v)
-    ensures DisjointMapUnion(PartitionLayer(c, v).AllPartitions()) == ZeroMap()
-  {
-    //maybe say something about init
-    assert |v.hosts| != 0;
-    assert PartitionLayer(c, v).ValidHosts() == {};
-    assert PartitionLayer(c, v).HostMaps() != map[];
-    assert HostOwner(0) in PartitionLayer(c, v).AllPartitions();
-  }
+
+lemma InitialStateDisjoint(c: Constants, v: Variables) 
+  requires c.WF()
+  requires v.WF(c)
+  requires Init(c, v)
+  ensures PartitionLayer(c, v).KeysOwnedDisjointly()
 
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
   {
 /*{*/
-    //&& v.WF(c)
-    //&& PartitionLayer(c, v).IsFullAndDisjoint()
-    && true
+    && v.WF(c)
+    && c.WF()
+    && PartitionLayer(c, v).IsFullAndDisjoint()
 /*}*/
   }
 
@@ -517,16 +507,20 @@ module RefinementProof refines RefinementObligation {
     ensures AtomicKVSpec.Init(ConstantsAbstraction(c), VariablesAbstraction(c, v))
   {
 /*{*/
-  assert Inv(c,v);
-  assert Init(c, v);
-  //assert IsFull(ZeroMap()); //this passes
-  var allParts := DisjointMapUnion(PartitionLayer(c, v).AllPartitions());
-  //assert allPartsIsFull(c,v);
-  assert IsFull(allParts);
-  assert allParts == ZeroMap();
+    // prove init state fullness (1) and disjointness (2)
+    InitialStateFull(c, v);
+    InitialStateDisjoint(c, v);
+    var pl := PartitionLayer(c, v);
+    pl.EstablishDisjointness();    
 
-  //ensure map we have is a zero map
-  //in the groupinit for hosts, only the first host aka host 0 has the zeromap
+    // state machine proof (3)
+    // prove no other hosts have keys
+    assert v.network.inFlightMessages == {};
+    // need to prove other hosts empty using helper lemmas now that we proved fullness and disjointness above!!
+    assert forall id | id != 0 && id < |v.hosts| :: v.hosts[id].hostOwnedMap == EmptyMap(); // other hosts empty
+    assert v.hosts[0].hostOwnedMap == ZeroMap();  // prove host 0 has ZeroMap
+    assert VariablesAbstraction(c, v).mappy == ZeroMap(); // therefore our abstraction must equal ZeroMap
+
 
     
 /*}*/
@@ -544,7 +538,7 @@ module RefinementProof refines RefinementObligation {
     ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
   {
 /*{*/
-
+    assert true;
 /*}*/
   }
 }
