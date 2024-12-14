@@ -495,6 +495,33 @@ lemma InitialStateMatchesSpec(c: Constants, v: Variables)
   requires PartitionLayer(c, v).IsFullAndDisjoint()
   ensures VariablesAbstraction(c, v).mappy == ZeroMap()
 
+
+lemma NextPreservesFull(c: Constants, v: Variables, v': Variables, event: Event)
+  requires c.WF()
+  requires v.WF(c)
+  requires v'.WF(c)
+  requires Next(c, v, v', event)
+  requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
+  ensures PartitionLayer(c, v').PartitionIsFull()
+
+
+lemma NextPreservesDisjoint(c: Constants, v: Variables, v': Variables, event: Event)
+  requires c.WF()
+  requires v.WF(c)
+  requires v'.WF(c)
+  requires Next(c, v, v', event)
+  requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
+  ensures PartitionLayer(c, v').KeysOwnedDisjointly()
+
+
+lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Event)
+  requires c.WF()
+  requires v.WF(c)
+  requires v'.WF(c)
+  requires Next(c, v, v', event)
+  requires PartitionLayer(c, v).IsFullAndDisjoint()
+  requires PartitionLayer(c, v').IsFullAndDisjoint()
+  ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
@@ -540,7 +567,11 @@ lemma InitialStateMatchesSpec(c: Constants, v: Variables)
     ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
   {
 /*{*/
-    assert true;
+    NextPreservesFull(c, v, v', event);
+    NextPreservesDisjoint(c, v, v', event);
+    var pl' := PartitionLayer(c, v');
+    pl'.EstablishDisjointness();
+    NextStateMatchesSpec(c, v, v', event);
 /*}*/
   }
 }
