@@ -8,7 +8,7 @@ module RefinementProof refines RefinementObligation {
   ghost function ConstantsAbstraction(c: Constants) : AtomicKVSpec.Constants
   {
 /*{*/
-    AtomicKVSpec.Constants() //we have no constants
+    AtomicKVSpec.Constants() //we have no constant
 /*}*/
   }
 
@@ -474,11 +474,36 @@ module RefinementProof refines RefinementObligation {
   }
 
 /*{*/
+
+
+
+
 lemma InitialStateFull(c: Constants, v: Variables)
   requires c.WF()
   requires v.WF(c)
   requires Init(c, v)
   ensures PartitionLayer(c, v).PartitionIsFull()
+{
+  
+  var pl := PartitionLayer(c, v);
+  
+  //goes back to the original plan we had but with correct syntax
+  //goal: show that when we do .allpartitions for init, despite that being opaque, we will have a full imap
+  //def of partitionisfull uses forall key :: SomeOwnerDefinesKey(maps, key)
+
+  forall key 
+    ensures SomeOwnerDefinesKey(pl.AllPartitions(), key)
+  {
+    assert v.hosts[0].hostOwnedMap == ZeroMap();  
+    assert IsFull(v.hosts[0].hostOwnedMap); 
+
+    //this is what we didn't know to use originally, connection between raw and others
+    assert RawOwnerClaimsKey(c, v, HostOwner(0), key);
+    pl.RawToPartitionClaimsKey(HostOwner(0), key);
+    assert key in pl.AllPartitions()[HostOwner(0)];
+    assert OwnerDefinesKey(pl.AllPartitions(), HostOwner(0), key);
+  }
+}
 
 
 lemma InitialStateDisjoint(c: Constants, v: Variables) 
@@ -486,6 +511,30 @@ lemma InitialStateDisjoint(c: Constants, v: Variables)
   requires v.WF(c)
   requires Init(c, v)
   ensures PartitionLayer(c, v).KeysOwnedDisjointly()
+{
+  var pl := PartitionLayer(c, v);
+  
+  //goal: show that if one owner claims a key, it is unique
+  forall key, owner1, owner2 | pl.PartitionOwnerClaimsKey(owner1, key) && pl.PartitionOwnerClaimsKey(owner2, key)
+    ensures owner1 == owner2
+  {
+    pl.PartitionToRawClaimsKey(owner1, key);
+    pl.PartitionToRawClaimsKey(owner2, key);
+  }
+}
+
+lemma IntialStateFullAndDisjoint(c: Constants, v: Variables)
+  requires c.WF()
+  requires v.WF(c)
+  requires Init(c, v)
+  ensures PartitionLayer(c, v).IsFullAndDisjoint()
+{
+  var pl := PartitionLayer(c, v);
+
+  InitialStateFull(c, v);
+  InitialStateDisjoint(c, v);
+  pl.EstablishDisjointness();
+}
 
 
 lemma InitialStateMatchesSpec(c: Constants, v: Variables)
@@ -494,6 +543,31 @@ lemma InitialStateMatchesSpec(c: Constants, v: Variables)
   requires Init(c, v)
   requires PartitionLayer(c, v).IsFullAndDisjoint()
   ensures VariablesAbstraction(c, v).mappy == ZeroMap()
+{
+  var pl := PartitionLayer(c, v);
+
+  //everything in mappy is in zero map!
+  forall key | key in VariablesAbstraction(c, v).mappy.Keys 
+    ensures VariablesAbstraction(c, v).mappy[key] == ZeroMap()[key]
+  {
+    assert v.hosts[0].hostOwnedMap == ZeroMap();
+    assert RawOwnerAssignsValue(c, v, HostOwner(0), key, 0);
+    
+    //again, this is what we didn't use originally: connection from raw to parition to spec
+    pl.RawToPartitionEstablishesValue(HostOwner(0), key, 0);
+    pl.PartitionToSpecViewEstablishesValue(HostOwner(0), key, 0);
+  }
+  
+  //then everything in zero map is in mappy! 
+  forall key | key in ZeroMap().Keys 
+    ensures key in VariablesAbstraction(c, v).mappy.Keys && VariablesAbstraction(c, v).mappy[key] == ZeroMap()[key]
+  {
+    assert v.hosts[0].hostOwnedMap == ZeroMap();
+    assert RawOwnerAssignsValue(c, v, HostOwner(0), key, 0);
+    pl.RawToPartitionEstablishesValue(HostOwner(0), key, 0);
+    pl.PartitionToSpecViewEstablishesValue(HostOwner(0), key, 0);
+  }
+}
 
 
 lemma NextPreservesFull(c: Constants, v: Variables, v': Variables, event: Event)
@@ -502,7 +576,9 @@ lemma NextPreservesFull(c: Constants, v: Variables, v': Variables, event: Event)
   requires v'.WF(c)
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
-  ensures PartitionLayer(c, v').PartitionIsFull()
+  ensures PartitionLayer(c, v').PartitionIsFull(){
+    
+  }
 
 
 lemma NextPreservesDisjoint(c: Constants, v: Variables, v': Variables, event: Event)
@@ -511,7 +587,9 @@ lemma NextPreservesDisjoint(c: Constants, v: Variables, v': Variables, event: Ev
   requires v'.WF(c)
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
-  ensures PartitionLayer(c, v').KeysOwnedDisjointly()
+  ensures PartitionLayer(c, v').KeysOwnedDisjointly(){
+
+  }
 
 
 lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Event)
@@ -521,7 +599,9 @@ lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Eve
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()
   requires PartitionLayer(c, v').IsFullAndDisjoint()
-  ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
+  ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event){
+
+  }
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
@@ -547,10 +627,11 @@ lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Eve
     InitialStateDisjoint(c, v);
     var pl := PartitionLayer(c, v);
 
-    // full + disjoint :)
+    // full + disjoint work together
+    IntialStateFullAndDisjoint(c,v);
     pl.EstablishDisjointness();    
 
-    // spec init <--> raw init
+    //actual init connections
     InitialStateMatchesSpec(c, v);
 /*}*/
   }
