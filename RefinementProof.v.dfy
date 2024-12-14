@@ -487,6 +487,14 @@ lemma InitialStateDisjoint(c: Constants, v: Variables)
   requires Init(c, v)
   ensures PartitionLayer(c, v).KeysOwnedDisjointly()
 
+
+lemma InitialStateMatchesSpec(c: Constants, v: Variables)
+  requires c.WF()
+  requires v.WF(c)
+  requires Init(c, v)
+  requires PartitionLayer(c, v).IsFullAndDisjoint()
+  ensures VariablesAbstraction(c, v).mappy == ZeroMap()
+
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
@@ -511,18 +519,12 @@ lemma InitialStateDisjoint(c: Constants, v: Variables)
     InitialStateFull(c, v);
     InitialStateDisjoint(c, v);
     var pl := PartitionLayer(c, v);
+
+    // full + disjoint :)
     pl.EstablishDisjointness();    
 
-    // state machine proof (3)
-    // prove no other hosts have keys
-    assert v.network.inFlightMessages == {};
-    // need to prove other hosts empty using helper lemmas now that we proved fullness and disjointness above!!
-    assert forall id | id != 0 && id < |v.hosts| :: v.hosts[id].hostOwnedMap == EmptyMap(); // other hosts empty
-    assert v.hosts[0].hostOwnedMap == ZeroMap();  // prove host 0 has ZeroMap
-    assert VariablesAbstraction(c, v).mappy == ZeroMap(); // therefore our abstraction must equal ZeroMap
-
-
-    
+    // spec init <--> raw init
+    InitialStateMatchesSpec(c, v);
 /*}*/
   }
 
