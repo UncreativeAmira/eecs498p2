@@ -576,9 +576,30 @@ lemma NextPreservesFull(c: Constants, v: Variables, v': Variables, event: Event)
   requires v'.WF(c)
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
-  ensures PartitionLayer(c, v').PartitionIsFull(){
-    
+  ensures PartitionLayer(c, v').PartitionIsFull()
+{
+  var pl := PartitionLayer(c, v);
+  var pl' := PartitionLayer(c, v');
+  var step :| NextStep(c, v, v', event, step);
+
+  forall key ensures SomeOwnerDefinesKey(pl'.AllPartitions(), key) 
+  {
+    var owner := pl.GetPartitionOwner(key);
+    pl.PartitionToRawClaimsKey(owner, key);
+
+    // need to find who owns it in v' - should be same owner or step.hostid or message
+    var new_owner := if step.msgOps.send.Some? && key in step.msgOps.send.value.sentMap 
+                     then MessageOwner(step.msgOps.send.value)
+                     else if step.msgOps.recv.Some? && key in step.msgOps.recv.value.sentMap
+                     then HostOwner(step.hostid)
+                     else owner;
+
+    assert RawOwnerClaimsKey(c, v', new_owner, key);
+    pl'.RawToPartitionClaimsKey(new_owner, key);
+    assert key in pl'.AllPartitions()[new_owner];
+    assert OwnerDefinesKey(pl'.AllPartitions(), new_owner, key);
   }
+}
 
 
 lemma NextPreservesDisjoint(c: Constants, v: Variables, v': Variables, event: Event)
@@ -587,10 +608,33 @@ lemma NextPreservesDisjoint(c: Constants, v: Variables, v': Variables, event: Ev
   requires v'.WF(c)
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()  // need old state's properties
-  ensures PartitionLayer(c, v').KeysOwnedDisjointly(){
+  ensures PartitionLayer(c, v').KeysOwnedDisjointly()
+  {
+    var pl := PartitionLayer(c, v);
+    var pl' := PartitionLayer(c, v');
 
+    forall key, owner1, owner2 | pl'.PartitionOwnerClaimsKey(owner1, key) && pl'.PartitionOwnerClaimsKey(owner2, key)
+      ensures owner1 == owner2
+    {
+      pl'.PartitionToRawClaimsKey(owner1, key);
+      pl'.PartitionToRawClaimsKey(owner2, key);
+    }
   }
 
+lemma NextStateFullAndDisjoint(c: Constants, v: Variables, v': Variables, event: Event)
+  requires c.WF()
+  requires v.WF(c)
+  requires v'.WF(c)
+  requires Next(c, v, v', event)
+  requires PartitionLayer(c, v).IsFullAndDisjoint()
+  ensures PartitionLayer(c, v').IsFullAndDisjoint()
+{
+  var pl' := PartitionLayer(c, v');
+
+  NextPreservesFull(c, v, v', event);
+  NextPreservesDisjoint(c, v, v', event); 
+  pl'.EstablishDisjointness();
+}
 
 lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Event)
   requires c.WF()
@@ -599,9 +643,79 @@ lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Eve
   requires Next(c, v, v', event)
   requires PartitionLayer(c, v).IsFullAndDisjoint()
   requires PartitionLayer(c, v').IsFullAndDisjoint()
-  ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event){
+  ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
+{
+  var pl := PartitionLayer(c, v);
+  var pl' := PartitionLayer(c, v');
+  var step :| NextStep(c, v, v', event, step);
 
+  match event {
+    case Get(k, val) => {
+      // show value was correctly read
+      var owner := pl.GetPartitionOwner(k);
+      assert RawOwnerAssignsValue(c, v, owner, k, val);
+      pl.RawToPartitionEstablishesValue(owner, k, val);
+      pl.PartitionToSpecViewEstablishesValue(owner, k, val);
+
+      // show state unchanged
+      forall key | key in VariablesAbstraction(c, v').mappy.Keys
+        ensures VariablesAbstraction(c, v').mappy[key] == VariablesAbstraction(c, v).mappy[key]
+      {
+        var owner := pl.GetPartitionOwner(key);
+        var value := pl.Value(key);
+        assert RawOwnerAssignsValue(c, v, owner, key, value);
+        pl.RawToPartitionEstablishesValue(owner, key, value);
+        pl.PartitionToSpecViewEstablishesValue(owner, key, value);
+      }
+    }
+
+    case Put(k, val) => {
+      // show value was correctly updated
+      var owner := pl'.GetPartitionOwner(k);
+      assert RawOwnerAssignsValue(c, v', owner, k, val);
+      pl'.RawToPartitionEstablishesValue(owner, k, val);
+      pl'.PartitionToSpecViewEstablishesValue(owner, k, val);
+
+      // show other keys unchanged
+      forall key | key in VariablesAbstraction(c, v').mappy.Keys && key != k
+        ensures VariablesAbstraction(c, v').mappy[key] == VariablesAbstraction(c, v).mappy[key]
+      {
+        var owner := pl.GetPartitionOwner(key);
+        var value := pl.Value(key);
+        assert RawOwnerAssignsValue(c, v, owner, key, value);
+        pl.RawToPartitionEstablishesValue(owner, key, value);
+        pl.PartitionToSpecViewEstablishesValue(owner, key, value);
+      }
+    }
+
+    case NoOp => {
+      // show all values preserved through transfer
+      forall key | key in VariablesAbstraction(c, v').mappy.Keys
+        ensures VariablesAbstraction(c, v').mappy[key] == VariablesAbstraction(c, v).mappy[key]
+      {
+        var owner := pl.GetPartitionOwner(key);
+        var value := pl.Value(key);
+        
+        // track value through potential ownership transfer
+        if step.msgOps.send.Some? && key in step.msgOps.send.value.sentMap {
+          assert RawOwnerAssignsValue(c, v', MessageOwner(step.msgOps.send.value), key, value);
+          pl'.RawToPartitionEstablishesValue(MessageOwner(step.msgOps.send.value), key, value);
+          pl'.PartitionToSpecViewEstablishesValue(MessageOwner(step.msgOps.send.value), key, value);
+        } 
+        else if step.msgOps.recv.Some? && key in step.msgOps.recv.value.sentMap {
+          assert RawOwnerAssignsValue(c, v', HostOwner(step.hostid), key, value);
+          pl'.RawToPartitionEstablishesValue(HostOwner(step.hostid), key, value);
+          pl'.PartitionToSpecViewEstablishesValue(HostOwner(step.hostid), key, value);
+        }
+        else {
+          assert RawOwnerAssignsValue(c, v', owner, key, value);
+          pl'.RawToPartitionEstablishesValue(owner, key, value);
+          pl'.PartitionToSpecViewEstablishesValue(owner, key, value);
+        }
+      }
+    }
   }
+}
 /*}*/
 
   ghost predicate Inv(c: Constants, v: Variables)
@@ -648,10 +762,16 @@ lemma NextStateMatchesSpec(c: Constants, v: Variables, v': Variables, event: Eve
     ensures AtomicKVSpec.Next(ConstantsAbstraction(c), VariablesAbstraction(c, v), VariablesAbstraction(c, v'), event)
   {
 /*{*/
+    // prove next state fullness (1) and disjointness (2)
     NextPreservesFull(c, v, v', event);
     NextPreservesDisjoint(c, v, v', event);
     var pl' := PartitionLayer(c, v');
+
+    // full + disjoint work together
+    NextStateFullAndDisjoint(c, v, v', event);
     pl'.EstablishDisjointness();
+
+    // actual next connections
     NextStateMatchesSpec(c, v, v', event);
 /*}*/
   }
